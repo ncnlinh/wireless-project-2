@@ -2,6 +2,7 @@ package nus.cs4222.shootingapp;
 
 import java.util.ArrayList;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Handler;
 import android.app.Activity;
@@ -32,6 +33,7 @@ import android.util.Log;
  *
  * @author Kartik Sankaran
  */
+@SuppressLint("NewApi")
 public class ShootingAppActivity
         extends Activity
         implements SensorEventListener,
