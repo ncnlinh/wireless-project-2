@@ -31,7 +31,7 @@ import android.util.Log;
  * <p> Modify the MIN_ACCL_FORCE value to a value suitable for your
  * phone.
  *
- * @author Kartik Sankaran
+ * @author Kartik Sankaran, Liu Longyin, Sharon Mariam Mathew, Nguyen Cao Nhat Linh
  */
 @SuppressLint("NewApi")
 public class ShootingAppActivity
