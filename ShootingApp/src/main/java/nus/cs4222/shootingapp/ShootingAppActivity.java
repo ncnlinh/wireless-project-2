@@ -36,8 +36,7 @@ import android.util.Log;
 @SuppressLint("NewApi")
 public class ShootingAppActivity
         extends Activity
-        implements SensorEventListener,
-        SoundPool.OnLoadCompleteListener {
+        implements SensorEventListener, SoundPool.OnLoadCompleteListener {
 
     /**
      * Called when the activity is first created.
@@ -158,6 +157,13 @@ public class ShootingAppActivity
         } else if (gravitySensor == null) {
             throw new Exception("Oops, there is no gravity sensor on this device :(");
         }
+
+        // Get references to the rotation sensor
+        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+        if (rotationSensor == null) {
+            throw new Exception("Oops, there is no rotation vector sensor on this device :(");
+        }
+
     }
 
     /**
@@ -179,6 +185,8 @@ public class ShootingAppActivity
         sensorManager.registerListener(this,                              // Listener
                 gravitySensor,                     // Sensor to measure
                 SensorManager.SENSOR_DELAY_GAME);  // Measurement interval (microsec)
+
+        sensorManager.registerListener(this, rotationSensor, SensorManager.SENSOR_DELAY_GAME);
     }
 
     /**
@@ -212,7 +220,10 @@ public class ShootingAppActivity
         // PA3: Detect the shooting direction and region.
         //  Think about what sensor or sensors on the phone can 
         //  help you do this.
-        detectShootingDirectionAndRegion(event);
+        else if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+            // Log.d(DEBUG_LOG_TAG, "Rotation vector event triggered.");
+            detectShootingDirectionAndRegion(event);
+        }
     }
 
     /**
@@ -292,6 +303,28 @@ public class ShootingAppActivity
         // PA3: Detect the shooting direction and region.
         //  Think about what sensor or sensors on the phone can 
         //  help you do this.
+        float[] rotVector = event.values.clone();
+
+        if (logCounter == LOG_INTERVAL - 1) {
+            String vDebugVals = "";
+            for (float v : rotVector) {
+                vDebugVals += " " + v;
+            }
+            Log.d(DEBUG_LOG_TAG, "Rotation vector:" + vDebugVals);
+            logCounter = 0;
+        } else {
+            logCounter++;
+        }
+
+        float zVector;
+        if (rotVector[2] < 0.0f) {
+            zVector = rotVector[2] / -2.0f;
+        } else {
+            zVector = 1.0f - (rotVector[2] / 2.0f);
+        }
+        shootingDirection = zVector * 360.0f;
+
+        shootingRegion = (int)(zVector * 8.0f) + 1;
 
         // PA3: After you have detected the shooting region, assign the
         //  region number (in the range 1 to 8) to the member variable 
@@ -309,7 +342,7 @@ public class ShootingAppActivity
         if (currentTime - lastPhoneDirectionTime > MAX_UPDATE_INTERVAL_PHONE_DIRECTION) {
 
             // Update the text view
-            textView_PhoneShootingRegion.setText("\nShooting direction: " + shootingDirection + " degrees" +
+            textView_PhoneShootingRegion.setText("\nShooting direction: " + String.format("%.1f", shootingDirection) + " degrees" +
                     "\nShooting region: " + shootingRegion);
 
             // Set the last GUI update time
@@ -537,6 +570,11 @@ public class ShootingAppActivity
      */
     private Sensor gravitySensor;
 
+    /**
+     * Rotation vector
+     */
+    private Sensor rotationSensor;
+
     // Gravity sensor
     /**
      * Last time the GUI was updated about phone angle (UNIX millisec).
@@ -666,4 +704,7 @@ public class ShootingAppActivity
      * TAG used for ddms logging.
      */
     private static final String TAG = "ShootingApp";
+    private static final String DEBUG_LOG_TAG = "CS4222";
+    private static final int LOG_INTERVAL = 50;
+    private int logCounter = 0;
 }
