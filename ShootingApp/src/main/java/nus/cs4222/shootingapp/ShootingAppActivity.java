@@ -28,7 +28,7 @@ import android.util.Log;
  * deprecated TYPE_ORIENTATION) to detect the shooting direction and
  * region.
  * <p>
- * <p> Modify the MIN_ACCL_FORCE value to a value suitable for your
+ * <p> Modify the MIN_LINEAR_ACCL_FORCE value to a value suitable for your
  * phone.
  *
  * @author Kartik Sankaran, Liu Longyin, Sharon Mariam Mathew, Nguyen Cao Nhat Linh
@@ -133,7 +133,7 @@ public class ShootingAppActivity
         setContentView(R.layout.main);
 
         // Get references to the GUI widgets
-        textView_Accl = (TextView) findViewById(R.id.TextView_Accl);
+        textView_LinearAccl = (TextView) findViewById(R.id.TextView_Accl);
         textView_Gravity = (TextView) findViewById(R.id.TextView_Gravity);
         textView_PhoneGesture = (TextView) findViewById(R.id.TextView_PhoneGesture);
         textView_PhoneFaceUp = (TextView) findViewById(R.id.TextView_PhoneFaceUp);
@@ -150,18 +150,21 @@ public class ShootingAppActivity
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
 
         // Get references to the linear accl and gravity sensors
-        acclSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+        linAcclSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
         gravitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
-        if (acclSensor == null) {
+        if (linAcclSensor == null) {
             throw new Exception("Oops, there is no linear accelerometer sensor on this device :(");
         } else if (gravitySensor == null) {
             throw new Exception("Oops, there is no gravity sensor on this device :(");
         }
 
         // Get references to the rotation sensor
-        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-        if (rotationSensor == null) {
-            throw new Exception("Oops, there is no rotation vector sensor on this device :(");
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        if (accelerometer == null) {
+            throw new Exception("Oops, there is no accelerometer on this device :(");
+        } else if (magnetometer == null) {
+            throw new Exception("Oops, there is no magnetometer on this device :(");
         }
 
     }
@@ -176,17 +179,20 @@ public class ShootingAppActivity
         numGestures = 0;
         shootingRegion = 1;
         shootingDirection = 0.0F;
-        isAcclInPeakZone = false;
+        isLinearAcclInPeakZone = false;
 
         // Start sampling the sensors
         sensorManager.registerListener(this,                              // Listener
-                acclSensor,                        // Sensor to measure
+                linAcclSensor,                        // Sensor to measure
                 SensorManager.SENSOR_DELAY_GAME);  // Measurement interval (microsec)
         sensorManager.registerListener(this,                              // Listener
                 gravitySensor,                     // Sensor to measure
                 SensorManager.SENSOR_DELAY_GAME);  // Measurement interval (microsec)
 
-        sensorManager.registerListener(this, rotationSensor, SensorManager.SENSOR_DELAY_GAME);
+        bIsPrevAccelSet = false;
+        bIsPrevMagSet = false;
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+        sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_GAME);
     }
 
     /**
@@ -214,14 +220,21 @@ public class ShootingAppActivity
         }
         // Case 2: Linear accl sensor
         else if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-            processAcclValues(event);
+            processLinearAcclValues(event);
         }
 
         // PA3: Detect the shooting direction and region.
         //  Think about what sensor or sensors on the phone can 
         //  help you do this.
-        else if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
-            // Log.d(DEBUG_LOG_TAG, "Rotation vector event triggered.");
+        else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            System.arraycopy(event.values, 0, prevAccelVals, 0, event.values.length);
+            bIsPrevAccelSet = true;
+        } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+            System.arraycopy(event.values, 0, prevMagVals, 0, event.values.length);
+            bIsPrevMagSet = true;
+        }
+
+        if (bIsPrevAccelSet && bIsPrevMagSet) {
             detectShootingDirectionAndRegion(event);
         }
     }
@@ -286,7 +299,7 @@ public class ShootingAppActivity
                     "\nX: " + gravityValues[0] +
                     "\nY: " + gravityValues[1] +
                     "\nZ: " + gravityValues[2] +
-                    "\nAngle of phone with horizontal plane: " + angle + " degrees" +
+                    "\nAngle of phone with horizontal plane: " + String.format("%.1f", angle) + " degrees" +
                     "\nIs phone face up?: " + isFaceUp);
             textView_PhoneFaceUp.setText("\nIs phone face up?: " + isFaceUp);
 
@@ -300,42 +313,28 @@ public class ShootingAppActivity
      */
     private void detectShootingDirectionAndRegion(SensorEvent event) {
 
-        // PA3: Detect the shooting direction and region.
-        //  Think about what sensor or sensors on the phone can 
-        //  help you do this.
-        float[] rotVector = event.values.clone();
+        // Detect the shooting direction and region
+        // Display the shooting direction and the shooting region
+
+        SensorManager.getRotationMatrix(magVals, null, prevAccelVals, prevMagVals);
+        SensorManager.getOrientation(magVals, magOrienatation);
 
         if (logCounter == LOG_INTERVAL - 1) {
-            String vDebugVals = "";
-            for (float v : rotVector) {
-                vDebugVals += " " + v;
-            }
-            Log.d(DEBUG_LOG_TAG, "Rotation vector:" + vDebugVals);
+            Log.d("OrientationTestActivity", String.format("Orientation: %f, %f, %f",
+                    magOrienatation[0], magOrienatation[1], magOrienatation[2]));
             logCounter = 0;
         } else {
             logCounter++;
         }
 
-        float zVector;
-        if (rotVector[2] < 0.0f) {
-            zVector = rotVector[2] / -2.0f;
+        if (magOrienatation[0] > 0.0f) {
+            shootingDirection = 360.0f * magOrienatation[0] / (2.0f * (float) (Math.PI));
         } else {
-            zVector = 1.0f - (rotVector[2] / 2.0f);
+            shootingDirection = 360.0f * (1.0f - (magOrienatation[0] / (-2.0f * (float) (Math.PI))));
         }
-        shootingDirection = zVector * 360.0f;
 
-        shootingRegion = (int)(zVector * 8.0f) + 1;
+        shootingRegion = (int) (shootingDirection / 45.0f) + 1;
 
-        // PA3: After you have detected the shooting region, assign the
-        //  region number (in the range 1 to 8) to the member variable 
-        //  'shootingRegion', and the shooting direction (in the range
-        //  0 to 360 deg) to the member variable 'shootingDirection', 
-        //  both variables are defined at the end of the Java code.
-        // The processAcclValues() method produces the gunshot sound 
-        //  based on the value of 'shootingRegion' (which is set to 1
-        //  by default).
-        // Also, display the shooting direction and the shooting region 
-        //  in the text view below.
 
         // Update the GUI (at a slower rate easy for the user to see on screen)
         long currentTime = System.currentTimeMillis();
@@ -353,7 +352,7 @@ public class ShootingAppActivity
     /**
      * Process the linear accl sensor.
      */
-    private void processAcclValues(SensorEvent event) {
+    private void processLinearAcclValues(SensorEvent event) {
 
         // This uses the accl to detect if a 'shooting' gesture has been made
         //  (by moving the phone sharply upwards/downwards/forwards with large force
@@ -385,14 +384,14 @@ public class ShootingAppActivity
         //  from different users performing the gesture, but for this assignment, 
         //  you can manually set thresholds that work reasonably ok for your 
         //  phone.
-        if (zAccl >= MIN_ACCL_FORCE) {
+        if (zAccl >= MIN_LINEAR_ACCL_FORCE) {
 
             // Since the accl can be noisy around the threshold (even with smoothing)
             //  we use a state machine to check if the accl has oscillated between
             //  two thresholds in the accl peak before we detect the gesture.
-            if (!isAcclInPeakZone) {
+            if (!isLinearAcclInPeakZone) {
                 ++numGestures;
-                isAcclInPeakZone = true;
+                isLinearAcclInPeakZone = true;
 
                 // Play gunshot sound according to 
                 //  the user's shooting direction (region).
@@ -407,9 +406,9 @@ public class ShootingAppActivity
         // Check if the accl has finished oscillating from the
         //  top threshold near the top of the peak to the bottom
         //  threshold at the bottom of the peak.
-        else if (isAcclInPeakZone) {
-            if (zAccl <= MIN_ACCL_PEAK_TROUGH) {
-                isAcclInPeakZone = false;
+        else if (isLinearAcclInPeakZone) {
+            if (zAccl <= MIN_LINEAR_ACCL_PEAK_TROUGH) {
+                isLinearAcclInPeakZone = false;
             }
         }
 
@@ -421,7 +420,7 @@ public class ShootingAppActivity
         if (currentTime - lastPhoneGestureTime > MAX_UPDATE_INTERVAL_PHONE_GESTURE) {
 
             // Update the text view
-            textView_Accl.setText("\nLinear Accelerometer Sensor" +
+            textView_LinearAccl.setText("\nLinear Accelerometer Sensor" +
                     "\nX: " + acclValues[0] +
                     "\nY: " + acclValues[1] +
                     "\nZ: " + acclValues[2] +
@@ -564,16 +563,21 @@ public class ShootingAppActivity
     /**
      * (Linear) Accl sensor.
      */
-    private Sensor acclSensor;
+    private Sensor linAcclSensor;
     /**
      * Gravity sensor.
      */
     private Sensor gravitySensor;
 
     /**
-     * Rotation vector
+     * accelerometer
      */
-    private Sensor rotationSensor;
+    private Sensor accelerometer;
+
+    /**
+     * magnetometer
+     */
+    private Sensor magnetometer;
 
     // Gravity sensor
     /**
@@ -605,15 +609,15 @@ public class ShootingAppActivity
     /**
      * Minimum gesture force (m/sec^2).
      */
-    private static final float MIN_ACCL_FORCE = 10.0F;
+    private static final float MIN_LINEAR_ACCL_FORCE = 8.0f;
     /**
      * Minimum accl peak trough value (m/sec^2).
      */
-    private static final float MIN_ACCL_PEAK_TROUGH = 1.0F;
+    private static final float MIN_LINEAR_ACCL_PEAK_TROUGH = 1.0F;
     /**
      * Flag to indicate if the accl is in the peak area.
      */
-    private boolean isAcclInPeakZone;
+    private boolean isLinearAcclInPeakZone;
     /**
      * Number of gestures performed by the user.
      */
@@ -641,11 +645,22 @@ public class ShootingAppActivity
      */
     private int shootingRegion;
 
+
+    // Accelerometer
+    private float[] prevAccelVals = new float[3];
+    private boolean bIsPrevAccelSet = false;
+
+    // Magnetometer
+    private float[] prevMagVals = new float[3];
+    private boolean bIsPrevMagSet = false;
+    private float[] magVals = new float[9];
+    private float[] magOrienatation = new float[3];
+
     // GUI widgets
     /**
      * Text view displaying the linear accl processing.
      */
-    private TextView textView_Accl;
+    private TextView textView_LinearAccl;
     /**
      * Text view displaying the gravity processing.
      */
