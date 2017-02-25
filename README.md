@@ -1,9 +1,11 @@
-Liu Longyin
+Liu Longyin A0112725N
+
 Sharon Mariam Mathew A0113000N  
-Nguyen Cao Nhat Linh
+
+Nguyen Cao Nhat Linh A0112156U
 
 
-Overview of solution
+# Overview of solution
 
 For this assignment, we have used a combination of the accelerometer and the magnetometer to detect the direction 
 and the range to produce the appropriate gunshot. Using the upper threshold and the lower threshold, 
